@@ -352,6 +352,57 @@ img{max-width:100%;display:block;}
 .back-link:hover{color:var(--orange);}
 
 footer.foot{text-align:center;padding:30px 16px 10px;color:var(--muted-2);font-size:11.5px;line-height:1.7;}
+
+/* ---------- Toast de confirmación ---------- */
+.app-toast{
+  position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);
+  background:var(--flame);color:#1a1310;font-weight:700;font-size:14px;
+  padding:13px 22px;border-radius:999px;box-shadow:0 8px 24px rgba(255,90,31,.4);
+  z-index:200;opacity:0;pointer-events:none;transition:opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+  max-width:88%;text-align:center;
+}
+.app-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ---------- Banner de carrito en el menú ---------- */
+.cart-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--flame-soft);border:1.5px solid var(--orange);border-radius:var(--radius);
+  padding:14px 16px;margin-bottom:18px;cursor:pointer;
+  animation:slideDown .4s ease;transition:transform .15s ease;
+}
+.cart-banner:active{transform:scale(.98);}
+.cart-banner-left{display:flex;align-items:center;gap:12px;}
+.cart-banner-icon{font-size:28px;animation:floaty 3s ease-in-out infinite;}
+.cart-banner-title{font-weight:700;font-size:14.5px;color:var(--cream);}
+.cart-banner-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.cart-banner-arrow{font-size:22px;color:var(--orange);font-weight:800;animation:nudge 1.2s ease-in-out infinite;}
+@keyframes slideDown{from{opacity:0;transform:translateY(-12px);}to{opacity:1;transform:translateY(0);}}
+@keyframes nudge{0%,100%{transform:translateX(0);}50%{transform:translateX(5px);}}
+
+/* ---------- Botón "Agregar otro producto" ---------- */
+.btn-add-more{
+  background:transparent;border:2px dashed var(--orange);color:var(--orange);
+  font-weight:700;font-size:15px;padding:16px;border-radius:var(--radius);
+  display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s ease;
+}
+.btn-add-more:hover{background:var(--flame-soft);}
+.btn-add-more:active{transform:scale(.98);}
+.btn-add-more .plus-badge{
+  width:26px;height:26px;border-radius:50%;background:var(--flame);color:#1a1310;
+  display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;
+}
+
+/* ---------- Pulso en botón de pago ---------- */
+.btn-pulse{animation:btnPulse 2.2s ease-in-out infinite;}
+@keyframes btnPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,122,26,.0);}
+  50%{box-shadow:0 0 0 8px rgba(255,122,26,.14);}
+}
+
+/* ---------- Animaciones de entrada escalonadas ---------- */
+.product-card{animation:cardIn .45s ease backwards;}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.96);}to{opacity:1;transform:translateY(0) scale(1);}}
+.cart-item{animation:cardIn .4s ease backwards;}
 footer.foot b{color:var(--muted);}
 </style>
 </head>
@@ -745,6 +796,22 @@ function renderStepper(activeKey){
   }).join("");
 }
 
+function showToast(message){
+  let toast = document.getElementById('appToast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'appToast';
+    toast.className = 'app-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.remove('show');
+  void toast.offsetWidth; // reinicia animación
+  toast.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>{ toast.classList.remove('show'); }, 2200);
+}
+
 function setScreen(name){
   state.screen = name;
   render();
@@ -773,18 +840,31 @@ function updateBottombar(){
    PANTALLA 1 — Elegir menú
    ============================================================ */
 function screenMenu(){
+  const hasItems = state.cart.length>0;
+  const cartBanner = hasItems ? `
+    <div class="cart-banner" data-action="go-cart-view">
+      <div class="cart-banner-left">
+        <span class="cart-banner-icon">🛍️</span>
+        <div>
+          <div class="cart-banner-title">Ya tienes ${cartCount()} ${cartCount()===1?'producto':'productos'}</div>
+          <div class="cart-banner-sub">Toca para revisar o pagar · ${money(cartTotal())}</div>
+        </div>
+      </div>
+      <span class="cart-banner-arrow">→</span>
+    </div>` : '';
   return `
   <div class="screen">
     <div class="eyebrow">Paso 1</div>
     <h2 class="title">¿Qué se te antoja hoy?</h2>
-    <p class="subtitle">Elige un producto y luego personaliza sus ingredientes a tu gusto.</p>
+    <p class="subtitle">${hasItems ? 'Elige otro producto para sumarlo a tu pedido, o revisa lo que ya tienes.' : 'Elige un producto y luego personaliza sus ingredientes a tu gusto.'}</p>
+    ${cartBanner}
     <div class="product-grid">
-      ${MENU.map(p=>`
-        <button class="product-card" data-action="open" data-id="${p.id}">
+      ${MENU.map((p,i)=>`
+        <button class="product-card" data-action="open" data-id="${p.id}" style="animation-delay:${i*0.05}s">
           <div class="product-emoji">${productIcon(p)}</div>
           <div class="product-name">${p.name}</div>
           <div class="product-price">${money(p.price)}</div>
-          <div class="product-cta">Personalizar</div>
+          <div class="product-cta">＋ Agregar</div>
         </button>
       `).join("")}
     </div>
@@ -929,7 +1009,7 @@ function screenCart(){
     detail.push("Incluye: "+includedSummary(it));
     if(extrasList.length) detail.push("Extras: "+extrasList.join(", "));
     return `
-    <div class="cart-item">
+    <div class="cart-item" style="animation-delay:${idx*0.06}s">
       <div class="cart-item-top">
         <div class="product-emoji">${productIcon(it.product)}</div>
         <div>
@@ -940,25 +1020,28 @@ function screenCart(){
       </div>
       ${detail.length? `<div class="cart-item-detail">${detail.join(" · ")}</div>` : ''}
       <div class="cart-item-actions">
-        <button class="btn btn-ghost btn-sm" data-action="edit-item" data-idx="${idx}">Editar</button>
-        <button class="btn btn-danger btn-sm" data-action="remove-item" data-idx="${idx}">Quitar</button>
+        <button class="btn btn-ghost btn-sm" data-action="edit-item" data-idx="${idx}">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" data-action="remove-item" data-idx="${idx}">🗑️ Quitar</button>
       </div>
     </div>`;
   }).join("");
 
   return `
   <div class="screen">
-    <div class="section-nav">
-      <button class="back-link" data-action="back-to-menu">← Agregar algo más</button>
-    </div>
     <div class="eyebrow">Paso 2</div>
-    <h2 class="title">Tu pedido</h2>
-    <p class="subtitle">Revisa todo antes de continuar con el pago.</p>
+    <h2 class="title">Tu pedido 🛍️</h2>
+    <p class="subtitle">Tienes <b>${cartCount()}</b> ${cartCount()===1?'producto':'productos'}. Puedes agregar más antes de pagar.</p>
     ${items}
-    <div class="summary-box">
+
+    <button class="btn btn-add-more btn-block" data-action="back-to-menu">
+      <span class="plus-badge">＋</span> Agregar otro producto
+    </button>
+
+    <div class="summary-box" style="margin-top:16px;">
+      <div class="summary-row"><span>Productos (${cartCount()})</span><span>${money(cartTotal())}</span></div>
       <div class="summary-row total"><span>Total a pagar</span><span class="val">${money(cartTotal())}</span></div>
     </div>
-    <button class="btn btn-primary btn-block" data-action="go-payment">Continuar al pago →</button>
+    <button class="btn btn-primary btn-block btn-pulse" data-action="go-payment">Continuar al pago →</button>
   </div>`;
 }
 
@@ -1303,6 +1386,7 @@ document.addEventListener('click', (e)=>{
 
   if(action==='open'){ openCustomize(t.dataset.id, null); }
   else if(action==='back-to-menu'){ state.editingIndex=null; state.draft=null; setScreen('menu'); }
+  else if(action==='go-cart-view'){ setScreen('cart'); }
   else if(action==='back-to-cart'){ setScreen('cart'); }
   else if(action==='back-to-payment'){ setScreen('payment'); }
   else if(action==='back-to-location'){ setScreen('location'); }
@@ -1341,10 +1425,13 @@ document.addEventListener('click', (e)=>{
       included: new Set(state.draft.included),
       extras: Object.assign({}, state.draft.extras)
     };
-    if(state.editingIndex!=null){ state.cart[state.editingIndex] = item; }
+    const isEdit = state.editingIndex!=null;
+    const productName = state.draft.product.name;
+    if(isEdit){ state.cart[state.editingIndex] = item; }
     else { state.cart.push(item); }
     state.draft = null; state.editingIndex = null;
     setScreen('cart');
+    showToast(isEdit ? `✅ ${productName} actualizado` : `🎉 ${productName} agregado a tu pedido`);
   }
   else if(action==='edit-item'){ const idx=+t.dataset.idx; openCustomize(state.cart[idx].product.id, idx); }
   else if(action==='remove-item'){ const idx=+t.dataset.idx; state.cart.splice(idx,1); render(); }
